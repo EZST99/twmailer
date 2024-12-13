@@ -15,6 +15,7 @@
 void sendRequest(int client_socket, const std::string& request);
 std::string receiveResponse(int client_socket);
 void handleSend(int client_socket);
+void handleList(int client_socket);
 
 int main(int argc, char** argv) {
     int client_socket;
@@ -59,7 +60,11 @@ int main(int argc, char** argv) {
 
         if (command == "SEND") {
             handleSend(client_socket);
-        } else {
+        } 
+        else if (command == "LIST") {
+            handleList(client_socket);
+        }
+        else {
             std::cout << "Unknown command. Try SEND, LIST, READ, DEL, or QUIT.\n";
         }
     }
@@ -113,4 +118,22 @@ void handleSend(int client_socket) {
     std::string response = receiveResponse(client_socket);
     std::cout << "Server: " << response << std::endl;
 }
+
+void handleList(int client_socket) {
+    std::string user;
+    std::cout << "User: ";
+    std::cin >> user;
+
+    std::string request = "LIST\n" + user + "\n";
+    sendRequest(client_socket, request);
+
+    std::string response = receiveResponse(client_socket);
+
+    if (response == "0\n") {
+        std::cout << "No messages for user: " << user << std::endl;
+    } else {
+        std::cout << "Server:\n" << response;
+    }
+}
+
 

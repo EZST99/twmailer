@@ -18,6 +18,7 @@ int create_socket = -1;
 
 void signalHandler(int sig);
 void handleSend(int current_socket, const std::string& sender, const std::string& receiver, const std::string& subject, const std::string& message);
+void handleList(int current_socket, const std::string& user);
 
 void clientCommunication(int current_socket) {
     std::string buffer(BUF, '\0');
@@ -41,6 +42,14 @@ void clientCommunication(int current_socket) {
                     message += line + "\n";
                 }
                 handleSend(current_socket, sender, receiver, subject, message);
+            }
+            else if (command == "LIST") {
+                std::string user;
+                request >> user;
+                handleList(current_socket, user);
+            }
+            else {
+                send(current_socket, "ERR\n", 4, 0);
             }
         } else if (size == 0) {
             std::cout << "Client closed the connection.\n";
@@ -141,5 +150,47 @@ void handleSend(int client_socket, const std::string& sender, const std::string&
         send(client_socket, "ERR\n", 4, 0);
     }
 }
+
+void handleList(int client_socket, const std::string& user) {
+    std::string userDir = "./mail-spool/" + user;
+
+    if (!std::filesystem::exists(userDir)) {
+        send(client_socket, "0\n", 2, 0); 
+        return;
+    }
+
+    std::string response;
+    int count = 0;
+
+    for (const auto& entry : std::filesystem::directory_iterator(userDir)) {
+        if (entry.path().extension() == ".msg") {
+            count++;
+            std::ifstream inFile(entry.path());
+            if (inFile) {
+                std::string line;
+                std::getline(inFile, line); 
+                if (line.rfind("Subject: ", 0) == 0) {
+                    response += std::to_string(count) + ": " + line.substr(9) + "\n"; 
+                } else {
+                    response += std::to_string(count) + ": (No subject)\n"; 
+                }
+            }
+        }
+    }
+
+    // Wenn keine Nachrichten gefunden wurden
+    if (count == 0) {
+        send(client_socket, "0\n", 2, 0);
+        return;
+    }
+
+    // Anzahl der Nachrichten an den Anfang der Antwort setzen
+    response = std::to_string(count) + "\n" + response;
+
+    // Sende die Antwort an den Client
+    send(client_socket, response.c_str(), response.size(), 0);
+}
+
+
 
 
