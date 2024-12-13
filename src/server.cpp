@@ -18,6 +18,7 @@ int create_socket = -1;
 
 void signalHandler(int sig);
 void handleSend(int current_socket, const std::string& sender, const std::string& receiver, const std::string& subject, const std::string& message);
+void handleRead(int current_socket, const std::string& username, const std::string& message_number);
 
 void clientCommunication(int current_socket) {
     std::string buffer(BUF, '\0');
@@ -41,6 +42,10 @@ void clientCommunication(int current_socket) {
                     message += line + "\n";
                 }
                 handleSend(current_socket, sender, receiver, subject, message);
+            } else if (command == "READ") {
+                std::string username, message_number;
+                request >> username >> message_number;
+                handleRead(current_socket, username, message_number);
             }
         } else if (size == 0) {
             std::cout << "Client closed the connection.\n";
@@ -136,6 +141,44 @@ void handleSend(int client_socket, const std::string& sender, const std::string&
         outFile << "Subject: " << subject << "\n";
         outFile << "Message:\n" << message << "\n";
         outFile.close();
+        send(client_socket, "OK\n", 3, 0);
+    } else {
+        send(client_socket, "ERR\n", 4, 0);
+    }
+}
+
+void handleRead(int client_socket, const std::string& username, const std::string& message_number){
+    std::string userDir = "./mail-spool/" + username;
+    if (std::filesystem::create_directories(userDir) == true){
+        // should return, tries to find a message in a directory directory hasnt existed before
+        std::cout << "DEBUG directory doesnt exist" << std::endl;
+        send(client_socket, "ERR\n", 4, 0);
+        return;
+    }
+
+    bool message_found = false;
+    int messageId = 1;
+    for (const auto& entry : std::filesystem::directory_iterator(userDir)) {
+        if (std::stoi(message_number) == messageId++) {
+            message_found = true;
+            break;
+        }
+    }
+
+    if (!message_found){
+        send(client_socket, "ERR\n", 4, 0);
+        return;
+    }
+    // message found
+    std::string messageFile = userDir + "/" + std::to_string(messageId) + ".msg";
+    std::ifstream inFile(messageFile);
+    if (inFile) {
+        std::ostringstream contentStream;
+        contentStream << inFile.rdbuf(); // Read the file into the stream
+        std::string fileContent = contentStream.str(); // Convert stream to string
+        std::cout << fileContent << std::endl;
+
+        inFile.close();
         send(client_socket, "OK\n", 3, 0);
     } else {
         send(client_socket, "ERR\n", 4, 0);
