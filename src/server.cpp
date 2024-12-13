@@ -17,40 +17,51 @@ int abortRequested = 0;
 int create_socket = -1;
 
 void signalHandler(int sig);
-void handleSend(int current_socket, const std::string& sender, const std::string& receiver, const std::string& subject, const std::string& message);
-void handleRead(int current_socket, const std::string& username, const std::string& message_number);
+void handleSend(int current_socket, const std::string &sender, const std::string &receiver, const std::string &subject, const std::string &message);
+void handleRead(int current_socket, const std::string &username, const std::string &message_number);
 
-void clientCommunication(int current_socket) {
+void clientCommunication(int current_socket)
+{
     std::string buffer(BUF, '\0');
 
     std::string welcomeMessage = "Welcome to myserver!\r\nPlease enter your commands...\r\n";
     send(current_socket, welcomeMessage.c_str(), welcomeMessage.length(), 0);
 
-    do {
+    do
+    {
         int size = recv(current_socket, &buffer[0], buffer.size(), 0);
-        if (size > 0) {
+        if (size > 0)
+        {
             buffer.resize(size); // Puffergröße anpassen
             std::istringstream request(buffer);
             std::string command;
             request >> command; // Lese den Befehl aus
 
-            if (command == "SEND") {
+            if (command == "SEND")
+            {
                 std::string sender, receiver, subject, message, line;
                 request >> sender >> receiver;
-                std::getline(request, subject);
-                while (std::getline(request, line) && line != ".") {
+                std::getline(request >> std::ws, subject);
+                while (std::getline(request, line) && line != ".")
+                {
                     message += line + "\n";
                 }
                 handleSend(current_socket, sender, receiver, subject, message);
-            } else if (command == "READ") {
+            }
+            else if (command == "READ")
+            {
                 std::string username, message_number;
                 request >> username >> message_number;
                 handleRead(current_socket, username, message_number);
             }
-        } else if (size == 0) {
+        }
+        else if (size == 0)
+        {
             std::cout << "Client closed the connection.\n";
             break;
-        } else {
+        }
+        else
+        {
             perror("Recv error");
             break;
         }
@@ -60,7 +71,8 @@ void clientCommunication(int current_socket) {
     close(current_socket);
 }
 
-int main() {
+int main()
+{
     sockaddr_in address, cliaddress;
     socklen_t addrlen;
     int reuseValue = 1;
@@ -68,7 +80,8 @@ int main() {
     signal(SIGINT, signalHandler);
 
     // Socket erstellen
-    if ((create_socket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+    if ((create_socket = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+    {
         perror("Socket error");
         return EXIT_FAILURE;
     }
@@ -81,35 +94,43 @@ int main() {
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(PORT);
 
-    if (bind(create_socket, (sockaddr*)&address, sizeof(address)) == -1) {
+    if (bind(create_socket, (sockaddr *)&address, sizeof(address)) == -1)
+    {
         perror("Bind error");
         return EXIT_FAILURE;
     }
 
-    if (listen(create_socket, 5) == -1) {
+    if (listen(create_socket, 5) == -1)
+    {
         perror("Listen error");
         return EXIT_FAILURE;
     }
 
-    while (!abortRequested) {
+    while (!abortRequested)
+    {
         std::cout << "Waiting for connections...\n";
         addrlen = sizeof(cliaddress);
-        int new_socket = accept(create_socket, (sockaddr*)&cliaddress, &addrlen);
-        if (new_socket == -1) {
-            if (abortRequested) {
+        int new_socket = accept(create_socket, (sockaddr *)&cliaddress, &addrlen);
+        if (new_socket == -1)
+        {
+            if (abortRequested)
+            {
                 perror("Accept error after abort");
-            } else {
+            }
+            else
+            {
                 perror("Accept error");
             }
             break;
         }
 
-        std::cout << "Client connected from " << inet_ntoa(cliaddress.sin_addr) 
+        std::cout << "Client connected from " << inet_ntoa(cliaddress.sin_addr)
                   << ":" << ntohs(cliaddress.sin_port) << "\n";
         clientCommunication(new_socket);
     }
 
-    if (create_socket != -1) {
+    if (create_socket != -1)
+    {
         shutdown(create_socket, SHUT_RDWR);
         close(create_socket);
     }
@@ -117,72 +138,105 @@ int main() {
     return EXIT_SUCCESS;
 }
 
-void signalHandler(int sig) {
-    if (sig == SIGINT) {
+void signalHandler(int sig)
+{
+    if (sig == SIGINT)
+    {
         std::cout << "Abort requested...\n";
         abortRequested = 1;
         close(create_socket);
     }
 }
 
-void handleSend(int client_socket, const std::string& sender, const std::string& receiver, const std::string& subject, const std::string& message) {
+void handleSend(int client_socket, const std::string &sender, const std::string &receiver, const std::string &subject, const std::string &message)
+{
     std::string userDir = "./mail-spool/" + receiver;
     std::filesystem::create_directories(userDir);
 
     int messageId = 1;
-    for (const auto& entry : std::filesystem::directory_iterator(userDir)) {
+    for ([[maybe_unused]] const auto &_ : std::filesystem::directory_iterator(userDir))
+    {
+
         messageId++;
     }
 
     std::string messageFile = userDir + "/" + std::to_string(messageId) + ".msg";
     std::ofstream outFile(messageFile);
-    if (outFile) {
+    if (outFile)
+    {
         outFile << "Sender: " << sender << "\n";
         outFile << "Subject: " << subject << "\n";
-        outFile << "Message:\n" << message << "\n";
+        outFile << "Message:\n"
+                << message << "\n";
         outFile.close();
         send(client_socket, "OK\n", 3, 0);
-    } else {
+    }
+    else
+    {
         send(client_socket, "ERR\n", 4, 0);
     }
 }
 
-void handleRead(int client_socket, const std::string& username, const std::string& message_number){
+void handleRead(int client_socket, const std::string &username, const std::string &message_number)
+{
     std::string userDir = "./mail-spool/" + username;
-    if (std::filesystem::create_directories(userDir) == true){
+    if (std::filesystem::create_directories(userDir) == true)
+    {
         // should return, tries to find a message in a directory directory hasnt existed before
-        std::cout << "DEBUG directory doesnt exist" << std::endl;
         send(client_socket, "ERR\n", 4, 0);
         return;
     }
 
     bool message_found = false;
     int messageId = 1;
-    for (const auto& entry : std::filesystem::directory_iterator(userDir)) {
-        if (std::stoi(message_number) == messageId++) {
+    for ([[maybe_unused]] const auto &entry : std::filesystem::directory_iterator(userDir))
+    {
+        if (std::stoi(message_number) == messageId++)
+        {
             message_found = true;
             break;
         }
     }
 
-    if (!message_found){
+    if (!message_found)
+    {
         send(client_socket, "ERR\n", 4, 0);
         return;
     }
+
     // message found
-    std::string messageFile = userDir + "/" + std::to_string(messageId) + ".msg";
+    std::string messageFile = userDir + "/" + message_number + ".msg";
     std::ifstream inFile(messageFile);
-    if (inFile) {
+    if (inFile)
+    {
         std::ostringstream contentStream;
-        contentStream << inFile.rdbuf(); // Read the file into the stream
-        std::string fileContent = contentStream.str(); // Convert stream to string
-        std::cout << fileContent << std::endl;
+        contentStream << inFile.rdbuf();                       // Read the file into the stream
+        std::string fileContent_message = contentStream.str(); // Convert stream to string
+
+        // string parsing message
+        size_t pos = fileContent_message.find("Message:");
+        std::string response;
+        if (pos != std::string::npos)
+        {
+            // Extract the substring starting after "Message:"
+            response = fileContent_message.substr(pos + std::string("Message:").length());
+
+            // Trim leading whitespace or newlines
+            response.erase(0, response.find_first_not_of("\n\r\t "));
+        }
+        else
+        {
+            send(client_socket, "ERR\n", 4, 0);
+            inFile.close();
+            return;
+        }
 
         inFile.close();
-        send(client_socket, "OK\n", 3, 0);
-    } else {
+        std::string ok_response = "OK\n" + response;
+        send(client_socket, ok_response.c_str(), 3 + response.size(), 0);
+    }
+    else
+    {
         send(client_socket, "ERR\n", 4, 0);
     }
 }
-
-
