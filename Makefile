@@ -20,21 +20,21 @@ CC=g++
 #############################################################################################
 CFLAGS=-g -Wall -Wextra -Werror -O -std=c++14 -pthread
 
-rebuild: clean all
-all: ./bin/server ./bin/client
+all: clean build
+build: ./src/server ./src/client
 
 clean:
 	clear
-	rm -f bin/* obj/*
+	rm -rf *.o ./bin/* ./obj/*
 
-./obj/myclient.o: myclient.c
-	${CC} ${CFLAGS} -o obj/myclient.o myclient.c -c
+./src/client.o: ./src/client.cpp
+	${CC} ${CFLAGS} -o ./src/client.o -c ./src/client.cpp 
 
-./obj/myserver.o: myserver.c
-	${CC} ${CFLAGS} -o obj/myserver.o myserver.c -c 
+./src/server.o: ./src/server.cpp
+	${CC} ${CFLAGS} -o ./src/server.o -c ./src/server.cpp  
 
-./bin/server: ./obj/myserver.o
-	${CC} ${CFLAGS} -o bin/server obj/myserver.o
+./src/server: ./src/server.o
+	${CC} ${CFLAGS} -o ./src/server ./src/server.o
 
-./bin/client: ./obj/myclient.o
-	${CC} ${CFLAGS} -o bin/client obj/myclient.o
+./src/client: ./src/client.o
+	${CC} ${CFLAGS} -o ./src/client ./src/client.o
