@@ -18,14 +18,14 @@ CC=g++
 #           of object code produced by the compiler or that of libraries supplied with it. 
 #           These are HP-UX specific flags.
 #############################################################################################
-CFLAGS=-g -Wall -Wextra -Werror -O -std=c++14 -pthread
+CFLAGS=-g -Wall -Wextra -Werror -O -std=c++17 -pthread
 
 all: clean build
 build: ./src/server ./src/client
 
 clean:
 	clear
-	rm -rf *.o ./bin/* ./obj/*
+	rm -rf ./src/*.o ./obj/* ./bin/* ./src/server ./src/client
 
 ./src/client.o: ./src/client.cpp
 	${CC} ${CFLAGS} -o ./src/client.o -c ./src/client.cpp 
