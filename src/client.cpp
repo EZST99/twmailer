@@ -16,6 +16,7 @@ void sendRequest(int client_socket, const std::string &request);
 std::string receiveResponse(int client_socket);
 void handleSend(int client_socket);
 void handleRead(int client_socket);
+void handleDel(int client_socket);
 
 int main(int argc, char **argv)
 {
@@ -73,6 +74,10 @@ int main(int argc, char **argv)
         else if (command == "READ")
         {
             handleRead(client_socket);
+        }
+        else if (command == "DEL")
+        {
+            handleDel(client_socket);
         }
         else
         {
@@ -149,6 +154,21 @@ void handleRead(int client_socket)
     std::cin.ignore();
 
     std::string request = "READ\n" + username + "\n" + message_number + "\n";
+    sendRequest(client_socket, request);
+
+    std::string response = receiveResponse(client_socket);
+    std::cout << "Server: " << response << std::endl;
+}
+
+void handleDel(int client_socket)
+{
+    std::string username, message_number;
+    std::cout << "Username: ";
+    std::cin >> username;
+    std::cout << "Message number: ";
+    std::cin >> message_number;
+    std::cin.ignore();
+    std::string request = "DEL\n" + username + "\n" + message_number + "\n";
     sendRequest(client_socket, request);
 
     std::string response = receiveResponse(client_socket);

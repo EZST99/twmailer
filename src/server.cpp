@@ -19,6 +19,7 @@ int create_socket = -1;
 void signalHandler(int sig);
 void handleSend(int current_socket, const std::string &sender, const std::string &receiver, const std::string &subject, const std::string &message);
 void handleRead(int current_socket, const std::string &username, const std::string &message_number);
+void handleDel(int current_socket, const std::string &username, const std::string &message_number);
 
 void clientCommunication(int current_socket)
 {
@@ -53,6 +54,12 @@ void clientCommunication(int current_socket)
                 std::string username, message_number;
                 request >> username >> message_number;
                 handleRead(current_socket, username, message_number);
+            }
+            else if (command == "DEL")
+            {
+                std::string username, message_number;
+                request >> username >> message_number;
+                handleDel(current_socket, username, message_number);
             }
         }
         else if (size == 0)
@@ -207,36 +214,66 @@ void handleRead(int client_socket, const std::string &username, const std::strin
     // message found
     std::string messageFile = userDir + "/" + message_number + ".msg";
     std::ifstream inFile(messageFile);
+
     if (inFile)
     {
-        std::ostringstream contentStream;
-        contentStream << inFile.rdbuf();                       // Read the file into the stream
-        std::string fileContent_message = contentStream.str(); // Convert stream to string
-
-        // string parsing message
-        size_t pos = fileContent_message.find("Message:");
-        std::string response;
-        if (pos != std::string::npos)
+        std::string line, response;
+        bool read_new = false;
+        while (std::getline(inFile, line) && line != ".")
         {
-            // Extract the substring starting after "Message:"
-            response = fileContent_message.substr(pos + std::string("Message:").length());
-
-            // Trim leading whitespace or newlines
-            response.erase(0, response.find_first_not_of("\n\r\t "));
-        }
-        else
-        {
-            send(client_socket, "ERR\n", 4, 0);
-            inFile.close();
-            return;
+            if (!read_new && line == "Message:")
+            {
+                read_new = true;
+                continue;
+            }
+            if (read_new)
+            {
+                response += line + "\n";
+            }
         }
 
         inFile.close();
         std::string ok_response = "OK\n" + response;
-        send(client_socket, ok_response.c_str(), 3 + response.size(), 0);
+        send(client_socket, ok_response.c_str(), ok_response.size(), 0);
     }
     else
     {
         send(client_socket, "ERR\n", 4, 0);
     }
+}
+
+void handleDel(int client_socket, const std::string &username, const std::string &message_number)
+{
+    std::string userDir = "./mail-spool/" + username;
+    if (std::filesystem::create_directories(userDir) == true)
+    {
+        // should return, tries to find a message in a directory directory hasnt existed before
+        send(client_socket, "ERR\n", 4, 0);
+        return;
+    }
+
+    bool message_found = false;
+    int messageId = 1;
+    for ([[maybe_unused]] const auto &entry : std::filesystem::directory_iterator(userDir))
+    {
+        if (std::stoi(message_number) == messageId++)
+        {
+            message_found = true;
+            break;
+        }
+    }
+
+    if (!message_found)
+    {
+        send(client_socket, "ERR\n", 4, 0);
+        return;
+    }
+
+    std::string filename_to_delete = userDir + "/" + message_number + ".msg";
+    if (!std::filesystem::remove(filename_to_delete))
+    {
+        send(client_socket, "ERR\n", 4, 0);
+        return;
+    }
+    send(client_socket, "OK\n", 3, 0);
 }
