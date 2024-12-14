@@ -17,6 +17,7 @@ std::string receiveResponse(int client_socket);
 void handleSend(int client_socket);
 void handleRead(int client_socket);
 void handleDel(int client_socket);
+void handleQuit(int client_socket);
 
 int main(int argc, char **argv)
 {
@@ -78,6 +79,11 @@ int main(int argc, char **argv)
         else if (command == "DEL")
         {
             handleDel(client_socket);
+        }
+        else if (command == "QUIT")
+        {
+            handleQuit(client_socket);
+            break;
         }
         else
         {
@@ -173,4 +179,9 @@ void handleDel(int client_socket)
 
     std::string response = receiveResponse(client_socket);
     std::cout << "Server: " << response << std::endl;
+}
+
+void handleQuit(int client_socket)
+{
+    sendRequest(client_socket, "QUIT\n");
 }

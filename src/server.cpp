@@ -20,6 +20,7 @@ void signalHandler(int sig);
 void handleSend(int current_socket, const std::string &sender, const std::string &receiver, const std::string &subject, const std::string &message);
 void handleRead(int current_socket, const std::string &username, const std::string &message_number);
 void handleDel(int current_socket, const std::string &username, const std::string &message_number);
+void handleQuit(int current_socket);
 
 void clientCommunication(int current_socket)
 {
@@ -60,6 +61,10 @@ void clientCommunication(int current_socket)
                 std::string username, message_number;
                 request >> username >> message_number;
                 handleDel(current_socket, username, message_number);
+            }
+            else if (command == "QUIT")
+            {
+                handleQuit(current_socket);
             }
         }
         else if (size == 0)
@@ -276,4 +281,10 @@ void handleDel(int client_socket, const std::string &username, const std::string
         return;
     }
     send(client_socket, "OK\n", 3, 0);
+}
+
+void handleQuit(int client_socket)
+{
+    shutdown(client_socket, SHUT_RDWR);
+    close(client_socket);
 }
