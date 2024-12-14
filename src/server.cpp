@@ -18,7 +18,7 @@ int create_socket = -1;
 
 void signalHandler(int sig);
 void handleSend(int current_socket, const std::string &sender, const std::string &receiver, const std::string &subject, const std::string &message);
-void handleRead(int current_socket, const std::string &username, const std::string &message_number);
+void handleList(int current_socket, const std::string& user);void handleRead(int current_socket, const std::string &username, const std::string &message_number);
 void handleDel(int current_socket, const std::string &username, const std::string &message_number);
 void handleQuit(int current_socket);
 
@@ -49,6 +49,11 @@ void clientCommunication(int current_socket)
                     message += line + "\n";
                 }
                 handleSend(current_socket, sender, receiver, subject, message);
+            }
+            else if (command == "LIST") {
+                std::string user;
+                request >> user;
+                handleList(current_socket, user);
             }
             else if (command == "READ")
             {
@@ -168,7 +173,6 @@ void handleSend(int client_socket, const std::string &sender, const std::string 
     int messageId = 1;
     for ([[maybe_unused]] const auto &_ : std::filesystem::directory_iterator(userDir))
     {
-
         messageId++;
     }
 
@@ -187,6 +191,45 @@ void handleSend(int client_socket, const std::string &sender, const std::string 
     {
         send(client_socket, "ERR\n", 4, 0);
     }
+}
+
+void handleList(int client_socket, const std::string& user)
+{
+    std::string userDir = "./mail-spool/" + user;
+    if(!std::filesystem::exists(userDir))
+    {
+        send(client_socket, "ERR\n", 4, 0);
+        return;
+    }
+
+    std::string response;
+    int count = 0;
+
+    for (const auto &entry : std::filesystem::directory_iterator(userDir))
+    {
+        if (entry.path().extension() == ".msg") {
+            count++;
+            std::ifstream inFile(entry.path());
+            if (inFile) {
+                std::string line;
+                std::getline(inFile, line);
+                std::getline(inFile, line); 
+                if (line.rfind("Subject: ", 0) == 0) {
+                    response += std::to_string(count) + ": " + line.substr(9) + "\n"; 
+                } else {
+                    response += std::to_string(count) + ": (No subject)\n"; 
+                }
+            }
+        }
+    }
+    if (count == 0) {
+        send(client_socket, "ERR\n", 4, 0);
+        return;
+    }
+
+    response = std::to_string(count) + "\n" + response;
+
+    send(client_socket, response.c_str(), response.size(), 0);
 }
 
 void handleRead(int client_socket, const std::string &username, const std::string &message_number)
