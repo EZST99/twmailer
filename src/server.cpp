@@ -235,8 +235,9 @@ void handleList(int client_socket, const std::string& user)
 void handleRead(int client_socket, const std::string &username, const std::string &message_number)
 {
     std::string userDir = "./mail-spool/" + username;
-    if (std::filesystem::is_directory(userDir) == false)
+    if (std::filesystem::create_directories(userDir) == true)
     {
+        // should return, tries to find a message in a directory directory hasnt existed before
         send(client_socket, "ERR\n", 4, 0);
         return;
     }
@@ -292,7 +293,7 @@ void handleRead(int client_socket, const std::string &username, const std::strin
 void handleDel(int client_socket, const std::string &username, const std::string &message_number)
 {
     std::string userDir = "./mail-spool/" + username;
-    if (std::filesystem::is_directory(userDir) == false)
+    if (std::filesystem::create_directories(userDir) == true)
     {
         // should return, tries to find a message in a directory directory hasnt existed before
         send(client_socket, "ERR\n", 4, 0);

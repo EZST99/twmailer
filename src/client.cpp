@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <limits>
 
 // Buffer size definition
 #define BUF 1024
@@ -171,8 +172,10 @@ void handleList(int client_socket)
     if (response == "ERR\n") {
         std::cout << "No messages for user: " << user << std::endl;
     } else {
-        std::cout << "Server:\n" << response;
+        std::cout << "Server:" << response << std::endl;
     }
+
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 }
 
 void handleRead(int client_socket)
