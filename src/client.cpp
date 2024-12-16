@@ -1,4 +1,3 @@
-// client.cpp
 #include <iostream>
 #include <string>
 #include <cstring>
@@ -11,6 +10,7 @@
 
 #define BUF 1024
 
+// Function to validate the username
 bool validateUsername(const std::string &username) {
     if(username.length() > 8)
         return false;
@@ -22,15 +22,18 @@ bool validateUsername(const std::string &username) {
     return true;
 }
 
+// Function to validate the subject
 bool validateSubject(const std::string &subject) {
     return subject.length() <= 80;
 }
 
+// Function to show the usage of the program
 void showUsage(const char* programName) {
     std::cout << "Usage: " << programName << " <ip> <port>\n"
               << "IP and port define the address of the server application.\n";
 }
 
+// Function to send a request to the server
 void sendRequest(int client_socket, const std::string &request) {
     if (send(client_socket, request.c_str(), request.size(), 0) == -1) {
         perror("Send error");
@@ -38,6 +41,7 @@ void sendRequest(int client_socket, const std::string &request) {
     }
 }
 
+// Function to receive a response from the server
 std::string receiveResponse(int client_socket) {
     std::string buffer(BUF, '\0');
     int size = recv(client_socket, &buffer[0], buffer.size(), 0);
@@ -52,6 +56,7 @@ std::string receiveResponse(int client_socket) {
     return buffer;
 }
 
+// Function to handle the SEND command
 void handleSend(int client_socket) {
     std::string sender, receiver, subject, message, line;
     while(true) {
@@ -95,6 +100,7 @@ void handleSend(int client_socket) {
     std::cout << "Server: \n" << response << std::endl;
 }
 
+// Function to handle the LIST command
 void handleList(int client_socket) {
     std::string user;
     std::cout << "User: ";
@@ -114,6 +120,7 @@ void handleList(int client_socket) {
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 }
 
+// Function to handle the READ command
 void handleRead(int client_socket) {
     std::string username, message_number;
 
@@ -130,6 +137,7 @@ void handleRead(int client_socket) {
     std::cout << "Server: \n" << response << std::endl;
 }
 
+// Function to handle the DEL command
 void handleDel(int client_socket) {
     std::string username, message_number;
     std::cout << "Username: ";
@@ -144,10 +152,12 @@ void handleDel(int client_socket) {
     std::cout << "Server: \n" << response << std::endl;
 }
 
+// Function to handle the QUIT command
 void handleQuit(int client_socket) {
     sendRequest(client_socket, "QUIT\n");
 }
 
+// Main function where the client connects to the server and waits for user input
 int main(int argc, char **argv) {
     if (argc != 3) {
         showUsage(argv[0]);
@@ -186,6 +196,7 @@ int main(int argc, char **argv) {
         std::cout << mainBuffer;
     }
 
+    // Main loop to handle user input
     while (true) {
         std::cout << ">> ";
         std::string command;

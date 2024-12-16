@@ -1,4 +1,3 @@
-// server.cpp
 #include <iostream>
 #include <cstring>
 #include <sstream>
@@ -13,10 +12,12 @@
 
 #define BUF 1024
 
+// Function to show the usage of the program
 void showUsage(const char* programName) {
     std::cout << "Usage: " << programName << " <port> <mail-spool-directoryname>\n";
 }
 
+// Function to handle the SEND command
 void handleSend(int client_socket, const std::string &sender, const std::string &receiver, const std::string &subject, const std::string &message, const std::string &mailDir) {
     std::string userDir = mailDir + "/" + receiver;
     std::filesystem::create_directories(userDir);
@@ -41,6 +42,7 @@ void handleSend(int client_socket, const std::string &sender, const std::string 
     }
 }
 
+// Function to handle the LIST command
 void handleList(int client_socket, const std::string& user, const std::string &mailDir) {
     std::string userDir = mailDir + "/" + user;
     if (!std::filesystem::exists(userDir)) {
@@ -64,6 +66,7 @@ void handleList(int client_socket, const std::string& user, const std::string &m
     }
 }
 
+// Function to handle the READ command
 void handleRead(int client_socket, const std::string &username, const std::string &message_number, const std::string &mailDir) {
     std::string userDir = mailDir + "/" + username;
     std::string messageFile = userDir + "/" + message_number + ".msg";
@@ -81,6 +84,7 @@ void handleRead(int client_socket, const std::string &username, const std::strin
     }
 }
 
+// Function to handle the DEL command
 void handleDel(int client_socket, const std::string &username, const std::string &message_number, const std::string &mailDir) {
     std::string userDir = mailDir + "/" + username;
     std::string messageFile = userDir + "/" + message_number + ".msg";
@@ -92,10 +96,12 @@ void handleDel(int client_socket, const std::string &username, const std::string
     }
 }
 
+// Function for the client communication where the server handles the commands
 void clientCommunication(int client_socket, const std::string &mailDir) {
     send(client_socket, "Welcome to the server!\n", 23, 0);
 
     char buffer[BUF];
+    // Loop to handle the client requests
     while (true) {
         int size = recv(client_socket, buffer, BUF, 0);
         if (size <= 0) break;
@@ -105,7 +111,7 @@ void clientCommunication(int client_socket, const std::string &mailDir) {
         std::string command, param1, param2, param3, message;
         request >> command >> param1 >> param2 >> std::ws;
         std::getline(request, param3);
-        std::getline(request, message, '\0'); // Nachricht lesen
+        std::getline(request, message, '\0');
 
 
         if (command == "SEND") {
@@ -123,6 +129,7 @@ void clientCommunication(int client_socket, const std::string &mailDir) {
     close(client_socket);
 }
 
+// Main function where the server initializes and waits for client connections
 int main(int argc, char** argv) {
     if (argc != 3) {
         showUsage(argv[0]);
