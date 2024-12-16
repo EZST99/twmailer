@@ -134,7 +134,7 @@ void handleRead(int client_socket) {
     sendRequest(client_socket, request);
 
     std::string response = receiveResponse(client_socket);
-    std::cout << "Server: \n" << response << std::endl;
+    std::cout << "\n" << "Server: \n" << response << std::endl;
 }
 
 // Function to handle the DEL command

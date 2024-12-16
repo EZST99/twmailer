@@ -17,17 +17,29 @@ void showUsage(const char* programName) {
     std::cout << "Usage: " << programName << " <port> <mail-spool-directoryname>\n";
 }
 
+// Function to get the next message ID by extracting the number from the message file name
+int getNextMessageId(const std::string &userDir) {
+    int maxId = 0;
+    for (const auto &entry : std::filesystem::directory_iterator(userDir)) {
+        if (entry.path().extension() == ".msg") {
+            std::string filename = entry.path().stem().string();
+            int id = std::stoi(filename);
+            if (id > maxId) {
+                maxId = id;
+            }
+        }
+    }
+    return maxId + 1;
+    
+
+}
+
 // Function to handle the SEND command
 void handleSend(int client_socket, const std::string &sender, const std::string &receiver, const std::string &subject, const std::string &message, const std::string &mailDir) {
     std::string userDir = mailDir + "/" + receiver;
     std::filesystem::create_directories(userDir);
 
-    int messageId = 1;
-    for (const auto &entry : std::filesystem::directory_iterator(userDir)) {
-        if (entry.path().extension() == ".msg") {
-            messageId++;
-        }
-    }
+    int messageId = getNextMessageId(userDir);
 
     std::string messageFile = userDir + "/" + std::to_string(messageId) + ".msg";
     std::ofstream outFile(messageFile);
