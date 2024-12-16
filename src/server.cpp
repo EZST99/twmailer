@@ -103,8 +103,10 @@ void clientCommunication(int client_socket, const std::string &mailDir) {
         std::istringstream request(buffer);
 
         std::string command, param1, param2, param3, message;
-        request >> command >> param1 >> param2 >> message >> std::ws;
+        request >> command >> param1 >> param2 >> std::ws;
         std::getline(request, param3);
+        std::getline(request, message, '\0'); // Nachricht lesen
+
 
         if (command == "SEND") {
             handleSend(client_socket, param1, param2, param3, message, mailDir);

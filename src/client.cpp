@@ -11,6 +11,21 @@
 
 #define BUF 1024
 
+bool validateUsername(const std::string &username) {
+    if(username.length() > 8)
+        return false;
+    for (char c : username) {
+        if (!isalnum(c)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool validateSubject(const std::string &subject) {
+    return subject.length() <= 80;
+}
+
 void showUsage(const char* programName) {
     std::cout << "Usage: " << programName << " <ip> <port>\n"
               << "IP and port define the address of the server application.\n";
@@ -39,14 +54,35 @@ std::string receiveResponse(int client_socket) {
 
 void handleSend(int client_socket) {
     std::string sender, receiver, subject, message, line;
-
-    std::cout << "Sender: ";
-    std::cin >> sender;
-    std::cout << "Receiver: ";
-    std::cin >> receiver;
+    while(true) {
+        std::cout << "Sender: ";
+        std::cin >> sender;
+        if (validateUsername(sender)) {
+            break;
+        } else {
+            std::cout << "Invalid username. Must be alphanumeric and at most 8 characters long.\n";
+        }
+    }
+    while(true) {
+        std::cout << "Receiver: ";
+        std::cin >> receiver;
+        if (validateUsername(receiver)) {
+            break;
+        } else {
+            std::cout << "Invalid username. Must be alphanumeric and at most 8 characters long.\n";
+        }
+    }
     std::cin.ignore(); // Clear input buffer
-    std::cout << "Subject: ";
-    std::getline(std::cin, subject);
+    while(true)
+    {
+        std::cout << "Subject: ";
+        std::getline(std::cin, subject);
+        if (validateSubject(subject)) {
+            break;
+        } else {
+            std::cout << "Invalid subject. Must be at most 80 characters long.\n";
+        }
+    }
     std::cout << "Message (end with a single '.' on a new line):\n";
     while (std::getline(std::cin, line) && line != ".") {
         message += line + "\n";
