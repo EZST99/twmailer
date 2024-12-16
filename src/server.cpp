@@ -147,12 +147,13 @@ int main(int argc, char** argv) {
     }
 
     int port = std::stoi(argv[1]);
-    std::string mailDir = argv[2];
+    std::string mailDir = "src/" + std::string(argv[2]);
 
-    sockaddr_in server_addr = {0};
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-    server_addr.sin_addr.s_addr = INADDR_ANY;
+    sockaddr_in server_addr = {};
+    server_addr.sin_family = AF_INET;           // IPv4
+    server_addr.sin_port = htons(port);        // Port (im Netzwerk-Byte-Order)
+    server_addr.sin_addr.s_addr = INADDR_ANY;  // Akzeptiere Verbindungen von jeder Adresse
+
 
     int server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (server_socket < 0 || bind(server_socket, (sockaddr*)&server_addr, sizeof(server_addr)) < 0 || listen(server_socket, 5) < 0) {
