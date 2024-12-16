@@ -30,8 +30,6 @@ int getNextMessageId(const std::string &userDir) {
         }
     }
     return maxId + 1;
-    
-
 }
 
 // Function to handle the SEND command
