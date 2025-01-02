@@ -18,23 +18,24 @@ CC=g++
 #           of object code produced by the compiler or that of libraries supplied with it. 
 #           These are HP-UX specific flags.
 #############################################################################################
-CFLAGS=-g -Wall -Wextra -Werror -O -std=c++17 -pthread
+CFLAGS=-g -Wall -Wextra -Werror -O -std=c++17 -pthread -L/usr/lib/x86_64-linux-gnu -I/usr/include
+LIBS=-lldap -llber
 
 all: clean build
 build: ./src/server ./src/client
 
 clean:
 	clear
-	rm -rf ./src/*.o ./obj/* ./bin/* ./src/server ./src/client
+	rm -rf ./src/*.o ./obj/* ./bin/* ./src/server ./src/client ./server ./client
 
 ./src/client.o: ./src/client.cpp
 	${CC} ${CFLAGS} -o ./src/client.o -c ./src/client.cpp 
 
 ./src/server.o: ./src/server.cpp
-	${CC} ${CFLAGS} -o ./src/server.o -c ./src/server.cpp  
+	${CC} ${CFLAGS} -o ./src/server.o -c ./src/server.cpp
 
 ./src/server: ./src/server.o
-	${CC} ${CFLAGS} -o ./src/server ./src/server.o
+	${CC} ${CFLAGS} -o ./server ./src/server.o ${LIBS}
 
 ./src/client: ./src/client.o
-	${CC} ${CFLAGS} -o ./src/client ./src/client.o
+	${CC} ${CFLAGS} -o ./client ./src/client.o
