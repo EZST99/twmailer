@@ -38,82 +38,173 @@ int getNextMessageId(const std::string &userDir)
     return maxId + 1;
 }
 
+// Function to handle the LOGIN command
 void handleLogin(int client_socket, const std::string &ldap_username, const std::string &password)
 {
-    LDAP *ld;
-    int result;
-    const std::string host = "ldap.technikum.wien.at";
-    const int port = 389;
-    const std::string searchBase = "dc=technikum-wien,dc=at";
+    const char *ldapUri = "ldap://ldap.technikum-wien.at:389";
+    const int ldapVersion = LDAP_VERSION3;
+
+    // username
+    char ldapBindUser[256];
+    char rawLdapUser[128];
+    if (ldap_username != "")
+    {
+        // add validation?
+    }
+    strcpy(rawLdapUser, ldap_username.c_str());
+    sprintf(ldapBindUser, "uid=%s,ou=people,dc=technikum-wien,dc=at", rawLdapUser);
+
+    // password
+    char ldapBindPassword[256];
+    strcpy(ldapBindPassword, password.c_str());
+
+    // search settings
+    const char *ldapSearchBaseDomainComponent = "dc=technikum-wien,dc=at";
+    const std::string searchFilter = "(uid=" + ldap_username + ")";
+    const char *ldapSearchFilter = searchFilter.c_str();
+    ber_int_t ldapSearchScope = LDAP_SCOPE_SUBTREE;
+    const char *ldapSearchResultAttributes[] = {"uid", NULL};
+
+    int rc; // return code
 
     // Initialize LDAP connection
-    const std::string ldapUri = "ldap://" + host + ":" + std::to_string(port);
-    result = ldap_initialize(&ld, ldapUri.c_str());
-    if (result != LDAP_SUCCESS)
+    LDAP *ldapHandle;
+    rc = ldap_initialize(&ldapHandle, ldapUri);
+    if (rc != LDAP_SUCCESS)
     {
-        std::cerr << "LDAP initialization failed: " << ldap_err2string(result) << "\n";
+        std::cerr << "LDAP initialization failed: " << ldap_err2string(rc) << "\n";
         send(client_socket, "ERR\n", 4, 0);
         return;
     }
     std::cout << "Connected to LDAP server at " << ldapUri << "\n";
 
-    // Search for the user DN
-    std::string filter = "(uid=" + ldap_username + ")";
-    LDAPMessage *searchResult;
-    result = ldap_search_ext_s(ld, searchBase.c_str(), LDAP_SCOPE_SUBTREE, filter.c_str(),
-                               NULL, 0, NULL, NULL, NULL, LDAP_NO_LIMIT, &searchResult);
-    if (result != LDAP_SUCCESS)
+    // set version options
+    rc = ldap_set_option(
+        ldapHandle,
+        LDAP_OPT_PROTOCOL_VERSION, // OPTION
+        &ldapVersion);             // IN-Value
+    if (rc != LDAP_OPT_SUCCESS)
     {
-        std::cerr << "Search failed: " << ldap_err2string(result) << "\n";
-        ldap_unbind_ext_s(ld, NULL, NULL);
+        std::cerr << "ldap_set_option(PROTOCOL_VERSION): " << ldap_err2string(rc) << "\n";
+        // fprintf(stderr, "ldap_set_option(PROTOCOL_VERSION): %s\n", ldap_err2string(rc));
+        ldap_unbind_ext_s(ldapHandle, NULL, NULL);
+        send(client_socket, "ERR\n", 4, 0);
+        return;
+    }
+
+    // start connection secure (initialize TLS)
+    rc = ldap_start_tls_s(
+        ldapHandle,
+        NULL,
+        NULL);
+    if (rc != LDAP_SUCCESS)
+    {
+        std::cerr << "ldap_start_tls_s(): " << ldap_err2string(rc) << "\n";
+        // fprintf(stderr, "ldap_start_tls_s(): %s\n", ldap_err2string(rc));
+        ldap_unbind_ext_s(ldapHandle, NULL, NULL);
+        send(client_socket, "ERR\n", 4, 0);
+        return;
+    }
+
+    // bind credentials
+    BerValue bindCredentials;
+    bindCredentials.bv_val = (char *)password.c_str();
+    bindCredentials.bv_len = password.length();
+    BerValue *servercredp; // server's credentials
+    rc = ldap_sasl_bind_s(
+        ldapHandle,
+        ldapBindUser,
+        LDAP_SASL_SIMPLE,
+        &bindCredentials,
+        NULL,
+        NULL,
+        &servercredp);
+    if (rc != LDAP_SUCCESS)
+    {
+        std::cerr << "LDAP bind error: " << ldap_err2string(rc) << "\n";
+        // fprintf(stderr, "LDAP bind error: %s\n", ldap_err2string(rc));
+        ldap_unbind_ext_s(ldapHandle, NULL, NULL);
+        send(client_socket, "ERR\n", 4, 0);
+        return;
+    }
+
+    // perform ldap search
+    LDAPMessage *searchResult;
+    rc = ldap_search_ext_s(
+        ldapHandle,
+        ldapSearchBaseDomainComponent,
+        ldapSearchScope,
+        ldapSearchFilter,
+        (char **)ldapSearchResultAttributes,
+        0,
+        NULL,
+        NULL,
+        NULL,
+        500,
+        &searchResult);
+    if (rc != LDAP_SUCCESS)
+    {
+        std::cerr << "LDAP search error: " << ldap_err2string(rc) << "\n";
+        // fprintf(stderr, "LDAP search error: %s\n", ldap_err2string(rc));
+        ldap_unbind_ext_s(ldapHandle, NULL, NULL);
         send(client_socket, "ERR\n", 4, 0);
         return;
     }
 
     // Get the user's DN
-    LDAPMessage *entry = ldap_first_entry(ld, searchResult);
+    LDAPMessage *entry = ldap_first_entry(ldapHandle, searchResult);
     if (!entry)
     {
         std::cerr << "User not found.\n";
         ldap_msgfree(searchResult);
-        ldap_unbind_ext_s(ld, NULL, NULL);
+        ldap_unbind_ext_s(ldapHandle, NULL, NULL);
         send(client_socket, "ERR\n", 4, 0);
         return;
     }
-    char *dn = ldap_get_dn(ld, entry);
+    char *dn = ldap_get_dn(ldapHandle, entry);
     if (!dn)
     {
         std::cerr << "Failed to get DN for user.\n";
         ldap_msgfree(searchResult);
-        ldap_unbind_ext_s(ld, NULL, NULL);
+        ldap_unbind_ext_s(ldapHandle, NULL, NULL);
         send(client_socket, "ERR\n", 4, 0);
         return;
     }
 
     std::cout << "User DN: " << dn << "\n";
 
-    // Prepare credentials for SASL bind with PLAIN mechanism
-    struct berval cred;
-    cred.bv_val = (char *)password.c_str();
-    cred.bv_len = password.length();
-
-    // Perform SASL bind to authenticate user
-    result = ldap_sasl_bind_s(ld, dn, "PLAIN", &cred, NULL, NULL, NULL);
-    ldap_memfree(dn);           // Free DN memory after use
-    ldap_msgfree(searchResult); // Free the search result
-
-    if (result != LDAP_SUCCESS)
+    BerElement *ber;
+    char *searchResultEntryAttribute;
+    for (searchResultEntryAttribute = ldap_first_attribute(ldapHandle, entry, &ber);
+         searchResultEntryAttribute != NULL;
+         searchResultEntryAttribute = ldap_next_attribute(ldapHandle, entry, ber))
     {
-        std::cerr << "Authentication failed: " << ldap_err2string(result) << "\n";
-        ldap_unbind_ext_s(ld, NULL, NULL);
-        send(client_socket, "ERR\n", 4, 0);
-        return;
+        BerValue **vals;
+        if ((vals = ldap_get_values_len(ldapHandle, entry, searchResultEntryAttribute)) != NULL)
+        {
+            for (int i = 0; i < ldap_count_values_len(vals); i++)
+            {
+                // vals[i]->bv_val is the username that needs to be stored for the session
+                printf("\t%s: %s\n", searchResultEntryAttribute, vals[i]->bv_val);
+            }
+            ldap_value_free_len(vals);
+        }
+
+        // free memory
+        ldap_memfree(searchResultEntryAttribute);
+    }
+    // free memory
+    if (ber != NULL)
+    {
+        ber_free(ber, 0);
     }
 
-    std::cout << "Authentication successful for user " << ldap_username << "\n";
+    printf("\n");
 
+    ldap_memfree(dn);           // Free DN memory after use
+    ldap_msgfree(searchResult); // Free the search result
     // Clean up and unbind
-    ldap_unbind_ext_s(ld, NULL, NULL);
+    ldap_unbind_ext_s(ldapHandle, NULL, NULL);
 
     // Send success message
     send(client_socket, "OK\n", 3, 0);
