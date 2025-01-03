@@ -39,7 +39,7 @@ int getNextMessageId(const std::string &userDir)
 }
 
 // Function to handle the LOGIN command
-void handleLogin(int client_socket, const std::string &ldap_username, const std::string &password)
+void handleLogin(int client_socket, const std::string &ldap_username, const std::string &password, std::string &sessionUsername)
 {
     const char *ldapUri = "ldap://ldap.technikum-wien.at:389";
     const int ldapVersion = LDAP_VERSION3;
@@ -186,6 +186,7 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
             {
                 // vals[i]->bv_val is the username that needs to be stored for the session
                 printf("\t%s: %s\n", searchResultEntryAttribute, vals[i]->bv_val);
+                sessionUsername = vals[i]->bv_val;
             }
             ldap_value_free_len(vals);
         }
@@ -311,6 +312,9 @@ void clientCommunication(int client_socket, const std::string &mailDir)
     send(client_socket, "Welcome to the server!\n", 23, 0);
 
     char buffer[BUF];
+
+    std::string sessionUsername = "";
+
     // Loop to handle the client requests
     while (true)
     {
@@ -320,30 +324,59 @@ void clientCommunication(int client_socket, const std::string &mailDir)
         buffer[size] = '\0';
         std::istringstream request(buffer);
 
-        std::string command, param1, param2, param3, message;
-        request >> command >> param1 >> param2 >> std::ws;
-        std::getline(request, param3);
+        std::string command, param1, param2, message;
+        request >> command >> param1 >> std::ws;
+        std::getline(request, param2);
         std::getline(request, message, '\0');
 
         if (command == "LOGIN")
         {
-            handleLogin(client_socket, param1, param2);
+            if (sessionUsername != "")
+            {
+                send(client_socket, "ERR\nAlready logged in\n", 21, 0);
+                continue;
+            }
+            handleLogin(client_socket, param1, param2, sessionUsername);
         }
         else if (command == "SEND")
         {
-            handleSend(client_socket, param1, param2, param3, message, mailDir);
+            if (sessionUsername == "")
+            {
+                send(client_socket, "ERR\nLogin first\n", 17, 0);
+                continue;
+            }
+            // param1 = receiver
+            // param2 = subject
+            handleSend(client_socket, sessionUsername, param1, param2, message, mailDir);
         }
         else if (command == "LIST")
         {
-            handleList(client_socket, param1, mailDir);
+            if (sessionUsername == "")
+            {
+                send(client_socket, "ERR\nLogin first\n", 17, 0);
+                continue;
+            }
+            handleList(client_socket, sessionUsername, mailDir);
         }
         else if (command == "READ")
         {
-            handleRead(client_socket, param1, param2, mailDir);
+            if (sessionUsername == "")
+            {
+                send(client_socket, "ERR\nLogin first\n", 17, 0);
+                continue;
+            }
+            // param1 = message_number
+            handleRead(client_socket, sessionUsername, param1, mailDir);
         }
         else if (command == "DEL")
         {
-            handleDel(client_socket, param1, param2, mailDir);
+            if (sessionUsername == "")
+            {
+                send(client_socket, "ERR\nLogin first\n", 17, 0);
+                continue;
+            }
+            // param1 = message_number
+            handleDel(client_socket, sessionUsername, param1, mailDir);
         }
         else if (command == "QUIT")
         {

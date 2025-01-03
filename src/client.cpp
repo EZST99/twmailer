@@ -175,20 +175,8 @@ void handleLogin(int client_socket)
 // Function to handle the SEND command
 void handleSend(int client_socket)
 {
-    std::string sender, receiver, subject, message, line;
-    while (true)
-    {
-        std::cout << "Sender: ";
-        std::cin >> sender;
-        if (validateUsername(sender))
-        {
-            break;
-        }
-        else
-        {
-            std::cout << "Invalid username. Must be alphanumeric and at most 8 characters long.\n";
-        }
-    }
+    std::string receiver, subject, message, line;
+
     while (true)
     {
         std::cout << "Receiver: ";
@@ -222,7 +210,7 @@ void handleSend(int client_socket)
         message += line + "\n";
     }
 
-    std::string request = "SEND\n" + sender + "\n" + receiver + "\n" + subject + "\n" + message + ".\n";
+    std::string request = "SEND\n" + receiver + "\n" + subject + "\n" + message + ".\n";
     sendRequest(client_socket, request);
 
     std::string response = receiveResponse(client_socket);
@@ -233,18 +221,15 @@ void handleSend(int client_socket)
 // Function to handle the LIST command
 void handleList(int client_socket)
 {
-    std::string user;
-    std::cout << "User: ";
-    std::cin >> user;
 
-    std::string request = "LIST\n" + user + "\n";
+    std::string request = "LIST\n";
     sendRequest(client_socket, request);
 
     std::string response = receiveResponse(client_socket);
 
     if (response == "ERR\n")
     {
-        std::cout << "No messages for user: " << user << std::endl;
+        std::cout << "No messages available" << std::endl;
     }
     else
     {
@@ -258,15 +243,13 @@ void handleList(int client_socket)
 // Function to handle the READ command
 void handleRead(int client_socket)
 {
-    std::string username, message_number;
+    std::string message_number;
 
-    std::cout << "Username: ";
-    std::cin >> username;
     std::cout << "Message Number: ";
     std::cin >> message_number;
     std::cin.ignore();
 
-    std::string request = "READ\n" + username + "\n" + message_number + "\n";
+    std::string request = "READ\n" + message_number + "\n";
     sendRequest(client_socket, request);
 
     std::string response = receiveResponse(client_socket);
@@ -278,13 +261,12 @@ void handleRead(int client_socket)
 // Function to handle the DEL command
 void handleDel(int client_socket)
 {
-    std::string username, message_number;
-    std::cout << "Username: ";
-    std::cin >> username;
+    std::string message_number;
+
     std::cout << "Message number: ";
     std::cin >> message_number;
     std::cin.ignore();
-    std::string request = "DEL\n" + username + "\n" + message_number + "\n";
+    std::string request = "DEL\n" + message_number + "\n";
     sendRequest(client_socket, request);
 
     std::string response = receiveResponse(client_socket);
@@ -380,7 +362,7 @@ int main(int argc, char **argv)
         }
         else
         {
-            std::cout << "Unknown command. Try SEND, LIST, READ, DEL, or QUIT.\n";
+            std::cout << "Unknown command. Try LOGIN, SEND, LIST, READ, DEL, or QUIT.\n";
         }
     }
 
