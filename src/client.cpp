@@ -113,7 +113,7 @@ const char *getpass()
     const char RETURN = 10;
 
     unsigned char ch = 0;
-    std::string password;
+    static std::string password;
 
     printf("Password: ");
 
@@ -149,10 +149,9 @@ void handleLogin(int client_socket)
     std::string ldap_username, password;
     std::cout << "LDAP username: ";
     std::cin >> ldap_username;
-    std::cout << "Password: ";
-    std::cin >> password;
-    // todo implement hidden input for pw
-    // password = getpass();
+
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    password = getpass();
 
     std::string request = "LOGIN\n" + ldap_username + "\n" + password + "\n";
     sendRequest(client_socket, request);
