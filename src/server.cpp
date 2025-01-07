@@ -10,8 +10,31 @@
 #include <filesystem>
 #include <fstream>
 #include <ldap.h>
+#include <tuple>
+#include <unordered_map>
+#include <chrono>
 
 #define BUF 1024
+
+struct BlacklistEntry
+{
+    int failCount;
+    std::chrono::steady_clock::time_point blacklistTime;
+};
+
+// Define a custom hash function for std::tuple
+struct TupleHash
+{
+    template <typename T1, typename T2>
+    std::size_t operator()(const std::tuple<T1, T2> &tuple) const
+    {
+        auto h1 = std::hash<T1>{}(std::get<0>(tuple));
+        auto h2 = std::hash<T2>{}(std::get<1>(tuple));
+        return h1 ^ (h2 << 1); // Combine hashes
+    }
+};
+
+std::unordered_map<std::tuple<std::string, std::string>, BlacklistEntry, TupleHash> blacklist;
 
 // Function to show the usage of the program
 void showUsage(const char *programName)
@@ -38,6 +61,41 @@ int getNextMessageId(const std::string &userDir)
     return maxId + 1;
 }
 
+std::string getClientIP(int client_socket)
+{
+    struct sockaddr_in addr;
+    socklen_t addr_len = sizeof(addr);
+    if (getpeername(client_socket, (struct sockaddr *)&addr, &addr_len) == 0)
+    {
+        return inet_ntoa(addr.sin_addr); // Return client IP
+    }
+    return "unknown";
+}
+
+bool isBlacklisted(const std::string &ip, const std::string &user)
+{
+    auto key = std::make_tuple(ip, user);
+    auto it = blacklist.find(key);
+    if (it != blacklist.end())
+    {
+        // Check if the blacklist time has expired
+        auto now = std::chrono::steady_clock::now();
+        if (now - it->second.blacklistTime > std::chrono::minutes(1))
+        {
+            blacklist.erase(it); // Remove expired entry
+            return false;
+        }
+        return true; // Still blacklisted
+    }
+    return false; // Not in blacklist
+}
+
+void addToBlacklist(const std::string &ip, const std::string &user)
+{
+    auto key = std::make_tuple(ip, user);
+    blacklist[key] = {3, std::chrono::steady_clock::now()}; // Set failCount and blacklistTime
+}
+
 // Function to handle the LOGIN command
 void handleLogin(int client_socket, const std::string &ldap_username, const std::string &password, std::string &sessionUsername)
 {
@@ -47,12 +105,18 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
     // username
     char ldapBindUser[256];
     char rawLdapUser[128];
-    if (ldap_username != "")
-    {
-        // add validation?
-    }
     strcpy(rawLdapUser, ldap_username.c_str());
     sprintf(ldapBindUser, "uid=%s,ou=people,dc=technikum-wien,dc=at", rawLdapUser);
+
+    std::string user_ip = getClientIP(client_socket);
+
+    // check is ip + user blacklisted?
+    if (isBlacklisted(user_ip, ldapBindUser))
+    {
+        std::cerr << "user ip are blacklisted\n";
+        send(client_socket, "ERR\nblacklisted\n", 16, 0);
+        return;
+    }
 
     // password
     char ldapBindPassword[256];
@@ -122,10 +186,33 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
     if (rc != LDAP_SUCCESS)
     {
         std::cerr << "LDAP bind error: " << ldap_err2string(rc) << "\n";
+
+        if (rc == LDAP_INVALID_CREDENTIALS)
+        {
+            std::cerr << "user ip incremented blacklist count\n";
+
+            std::tuple ip_user_key(user_ip, ldapBindUser);
+            (blacklist[ip_user_key].failCount)++;
+            blacklist[ip_user_key].blacklistTime = std::chrono::steady_clock::now();
+            if (blacklist[ip_user_key].failCount >= 3)
+            {
+                std::cerr << "user ip added to blacklisted\n";
+                addToBlacklist(user_ip, ldapBindUser);
+                send(client_socket, "ERR\nip and user blacklisted for 1 minute", 40, 0);
+                return;
+            }
+        }
         // fprintf(stderr, "LDAP bind error: %s\n", ldap_err2string(rc));
         ldap_unbind_ext_s(ldapHandle, NULL, NULL);
         send(client_socket, "ERR\n", 4, 0);
         return;
+    }
+
+    auto key = std::make_tuple(user_ip, ldapBindUser);
+    auto it = blacklist.find(key);
+    if (it != blacklist.end())
+    {
+        blacklist.erase(it); // Remove entry after log in
     }
 
     // perform ldap search
