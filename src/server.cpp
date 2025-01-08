@@ -19,6 +19,7 @@
 #define BUF 1024
 
 std::mutex loginMutex;
+std::mutex mailDirMutex;
 
 std::unordered_map<std::string, int> loginFailCount;
 std::unordered_map<std::string, std::chrono::steady_clock::time_point> lastLoginAttempt;
@@ -288,14 +289,13 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
 // Function to handle the SEND command
 void handleSend(int client_socket, const std::string &sender, const std::string &receiver, const std::string &subject, const std::string &message, const std::string &mailDir)
 {
-    loginMutex.lock();
     std::string userDir = mailDir + "/" + receiver;
+    mailDirMutex.lock();
     std::filesystem::create_directories(userDir);
-
     int messageId = getNextMessageId(userDir);
-
     std::string messageFile = userDir + "/" + std::to_string(messageId) + ".msg";
     std::ofstream outFile(messageFile);
+    
     if (outFile)
     {
         outFile << "Sender: " << sender << "\n";
@@ -309,15 +309,17 @@ void handleSend(int client_socket, const std::string &sender, const std::string 
     {
         send(client_socket, "ERR\n", 4, 0);
     }
-    loginMutex.unlock();
+    mailDirMutex.unlock();
 }
 
 // Function to handle the LIST command
 void handleList(int client_socket, const std::string &user, const std::string &mailDir)
 {
-    loginMutex.lock();
     std::string userDir = mailDir + "/" + user;
-    if (!std::filesystem::exists(userDir))
+    mailDirMutex.lock();
+    bool dirExists = std::filesystem::exists(userDir);
+    mailDirMutex.unlock();
+    if (!dirExists)
     {
         send(client_socket, "ERR\n", 4, 0);
         return;
@@ -325,6 +327,7 @@ void handleList(int client_socket, const std::string &user, const std::string &m
 
     std::string response;
     int count = 0;
+    mailDirMutex.lock();
     for (const auto &entry : std::filesystem::directory_iterator(userDir))
     {
         if (entry.path().extension() == ".msg")
@@ -333,8 +336,8 @@ void handleList(int client_socket, const std::string &user, const std::string &m
             response += entry.path().filename().string() + "\n";
         }
     }
+    mailDirMutex.unlock();
     response = std::to_string(count) + ": " + "\n" + response;
-    loginMutex.unlock();
     if (count == 0)
     {
         send(client_socket, "ERR\n", 4, 0);
@@ -348,7 +351,7 @@ void handleList(int client_socket, const std::string &user, const std::string &m
 // Function to handle the READ command
 void handleRead(int client_socket, const std::string &username, const std::string &message_number, const std::string &mailDir)
 {
-    loginMutex.lock();
+    mailDirMutex.lock();
     std::string userDir = mailDir + "/" + username;
     std::string messageFile = userDir + "/" + message_number + ".msg";
     std::ifstream inFile(messageFile);
@@ -361,22 +364,21 @@ void handleRead(int client_socket, const std::string &username, const std::strin
             response += line + "\n";
         }
         inFile.close();
+        mailDirMutex.unlock();
         send(client_socket, response.c_str(), response.size(), 0);
     }
     else
     {
         send(client_socket, "ERR\n", 4, 0);
     }
-    loginMutex.unlock();
 }
 
 // Function to handle the DEL command
 void handleDel(int client_socket, const std::string &username, const std::string &message_number, const std::string &mailDir)
 {
-    loginMutex.lock();
     std::string userDir = mailDir + "/" + username;
     std::string messageFile = userDir + "/" + message_number + ".msg";
-
+    mailDirMutex.lock();
     if (std::filesystem::remove(messageFile))
     {
         send(client_socket, "OK\n", 3, 0);
@@ -385,6 +387,7 @@ void handleDel(int client_socket, const std::string &username, const std::string
     {
         send(client_socket, "ERR\n", 4, 0);
     }
+    mailDirMutex.unlock();
 }
 
 // Function for the client communication where the server handles the commands
