@@ -333,7 +333,21 @@ void handleList(int client_socket, const std::string &user, const std::string &m
         if (entry.path().extension() == ".msg")
         {
             count++;
-            response += entry.path().filename().string() + "\n";
+            std::ifstream inFile(entry.path());
+            std::string line, subject;
+
+            // Search for subject
+            while (std::getline(inFile, line))
+            {
+                if (line.rfind("Subject: ", 0) == 0) // Line that begins with subject
+                {
+                    subject = line.substr(9); // extract subject
+                    break;
+                }
+            }
+
+            inFile.close();
+            response += std::to_string(count) + ": " + subject + "\n";
         }
     }
     mailDirMutex.unlock();

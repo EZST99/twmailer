@@ -238,7 +238,7 @@ void handleList(int client_socket)
                   << response << std::endl;
     }
 
-    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    //std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 }
 
 // Function to handle the READ command
