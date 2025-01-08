@@ -13,8 +13,12 @@
 #include <tuple>
 #include <unordered_map>
 #include <chrono>
+#include <thread>
+#include <mutex>
 
 #define BUF 1024
+
+std::mutex loginMutex;
 
 std::unordered_map<std::string, int> loginFailCount;
 std::unordered_map<std::string, std::chrono::steady_clock::time_point> lastLoginAttempt;
@@ -57,6 +61,7 @@ std::string getClientIP(int client_socket)
 
 bool isBlacklisted(const std::string &key)
 {
+    loginMutex.lock();
     auto it = loginFailCount.find(key);
     if (it != loginFailCount.end())
     {
@@ -64,6 +69,7 @@ bool isBlacklisted(const std::string &key)
         auto now = std::chrono::steady_clock::now();
         if (it->second >= 3 && now - lastLoginAttempt[key] <= std::chrono::minutes(1))
         {
+            loginMutex.unlock();
             return true;
         }
         if (now - lastLoginAttempt[key] > std::chrono::minutes(1))
@@ -72,6 +78,7 @@ bool isBlacklisted(const std::string &key)
         }
     }
 
+    loginMutex.unlock();
     return false; // Not in blacklist
 }
 
@@ -171,7 +178,7 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
 
         if (rc == LDAP_INVALID_CREDENTIALS)
         {
-
+            loginMutex.lock();
             (loginFailCount[ip_user_key])++;
             lastLoginAttempt[ip_user_key] = std::chrono::steady_clock::now();
 
@@ -181,17 +188,20 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
                 send(client_socket, "ERR\nip and user blacklisted for 1 minute", 40, 0);
                 return;
             }
+            loginMutex.unlock();
         }
         ldap_unbind_ext_s(ldapHandle, NULL, NULL);
         send(client_socket, "ERR\n", 4, 0);
         return;
     }
 
+    loginMutex.lock();
     auto it = loginFailCount.find(ip_user_key);
     if (it != loginFailCount.end())
     {
         loginFailCount.erase(it); // Remove entry after log in
     }
+    loginMutex.unlock();
 
     // perform ldap search
     LDAPMessage *searchResult;
@@ -278,6 +288,7 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
 // Function to handle the SEND command
 void handleSend(int client_socket, const std::string &sender, const std::string &receiver, const std::string &subject, const std::string &message, const std::string &mailDir)
 {
+    loginMutex.lock();
     std::string userDir = mailDir + "/" + receiver;
     std::filesystem::create_directories(userDir);
 
@@ -298,11 +309,13 @@ void handleSend(int client_socket, const std::string &sender, const std::string 
     {
         send(client_socket, "ERR\n", 4, 0);
     }
+    loginMutex.unlock();
 }
 
 // Function to handle the LIST command
 void handleList(int client_socket, const std::string &user, const std::string &mailDir)
 {
+    loginMutex.lock();
     std::string userDir = mailDir + "/" + user;
     if (!std::filesystem::exists(userDir))
     {
@@ -321,6 +334,7 @@ void handleList(int client_socket, const std::string &user, const std::string &m
         }
     }
     response = std::to_string(count) + ": " + "\n" + response;
+    loginMutex.unlock();
     if (count == 0)
     {
         send(client_socket, "ERR\n", 4, 0);
@@ -334,6 +348,7 @@ void handleList(int client_socket, const std::string &user, const std::string &m
 // Function to handle the READ command
 void handleRead(int client_socket, const std::string &username, const std::string &message_number, const std::string &mailDir)
 {
+    loginMutex.lock();
     std::string userDir = mailDir + "/" + username;
     std::string messageFile = userDir + "/" + message_number + ".msg";
     std::ifstream inFile(messageFile);
@@ -352,11 +367,13 @@ void handleRead(int client_socket, const std::string &username, const std::strin
     {
         send(client_socket, "ERR\n", 4, 0);
     }
+    loginMutex.unlock();
 }
 
 // Function to handle the DEL command
 void handleDel(int client_socket, const std::string &username, const std::string &message_number, const std::string &mailDir)
 {
+    loginMutex.lock();
     std::string userDir = mailDir + "/" + username;
     std::string messageFile = userDir + "/" + message_number + ".msg";
 
@@ -474,7 +491,7 @@ int main(int argc, char **argv)
         perror("Error initializing server");
         return EXIT_FAILURE;
     }
-
+    
     while (true)
     {
         sockaddr_in client_addr;
@@ -482,7 +499,9 @@ int main(int argc, char **argv)
         int client_socket = accept(server_socket, (sockaddr *)&client_addr, &client_len);
         if (client_socket >= 0)
         {
-            clientCommunication(client_socket, mailDir);
+            std::thread newThread(clientCommunication, client_socket, mailDir);
+            newThread.detach();
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
     }
 
