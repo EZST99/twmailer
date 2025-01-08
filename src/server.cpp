@@ -89,7 +89,9 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
 
     std::string user_ip = getClientIP(client_socket);
 
-    std::string ip_user_key = user_ip + ldap_username;
+    std::string ip_user_key = user_ip + "_" + ldap_username;
+
+    // load blacklist
 
     // check is ip + user blacklisted?
     if (isBlacklisted(ip_user_key))
