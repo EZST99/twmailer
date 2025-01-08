@@ -16,25 +16,8 @@
 
 #define BUF 1024
 
-struct BlacklistEntry
-{
-    int failCount;
-    std::chrono::steady_clock::time_point blacklistTime;
-};
-
-// Define a custom hash function for std::tuple
-struct TupleHash
-{
-    template <typename T1, typename T2>
-    std::size_t operator()(const std::tuple<T1, T2> &tuple) const
-    {
-        auto h1 = std::hash<T1>{}(std::get<0>(tuple));
-        auto h2 = std::hash<T2>{}(std::get<1>(tuple));
-        return h1 ^ (h2 << 1); // Combine hashes
-    }
-};
-
-std::unordered_map<std::tuple<std::string, std::string>, BlacklistEntry, TupleHash> blacklist;
+std::unordered_map<std::string, int> loginFailCount;
+std::unordered_map<std::string, std::chrono::steady_clock::time_point> lastLoginAttempt;
 
 // Function to show the usage of the program
 void showUsage(const char *programName)
@@ -72,28 +55,24 @@ std::string getClientIP(int client_socket)
     return "unknown";
 }
 
-bool isBlacklisted(const std::string &ip, const std::string &user)
+bool isBlacklisted(const std::string &key)
 {
-    auto key = std::make_tuple(ip, user);
-    auto it = blacklist.find(key);
-    if (it != blacklist.end())
+    auto it = loginFailCount.find(key);
+    if (it != loginFailCount.end())
     {
-        // Check if the blacklist time has expired
+        // Check if more than 3 fails or the blacklist time has expired
         auto now = std::chrono::steady_clock::now();
-        if (now - it->second.blacklistTime > std::chrono::minutes(1))
+        if (it->second >= 3 && now - lastLoginAttempt[key] <= std::chrono::minutes(1))
         {
-            blacklist.erase(it); // Remove expired entry
-            return false;
+            return true;
         }
-        return true; // Still blacklisted
+        if (now - lastLoginAttempt[key] > std::chrono::minutes(1))
+        {
+            loginFailCount.erase(it); // Only remove expired entries
+        }
     }
-    return false; // Not in blacklist
-}
 
-void addToBlacklist(const std::string &ip, const std::string &user)
-{
-    auto key = std::make_tuple(ip, user);
-    blacklist[key] = {3, std::chrono::steady_clock::now()}; // Set failCount and blacklistTime
+    return false; // Not in blacklist
 }
 
 // Function to handle the LOGIN command
@@ -110,8 +89,10 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
 
     std::string user_ip = getClientIP(client_socket);
 
+    std::string ip_user_key = user_ip + ldap_username;
+
     // check is ip + user blacklisted?
-    if (isBlacklisted(user_ip, ldapBindUser))
+    if (isBlacklisted(ip_user_key))
     {
         std::cerr << "user ip are blacklisted\n";
         send(client_socket, "ERR\nblacklisted\n", 16, 0);
@@ -150,7 +131,6 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
     if (rc != LDAP_OPT_SUCCESS)
     {
         std::cerr << "ldap_set_option(PROTOCOL_VERSION): " << ldap_err2string(rc) << "\n";
-        // fprintf(stderr, "ldap_set_option(PROTOCOL_VERSION): %s\n", ldap_err2string(rc));
         ldap_unbind_ext_s(ldapHandle, NULL, NULL);
         send(client_socket, "ERR\n", 4, 0);
         return;
@@ -189,30 +169,26 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
 
         if (rc == LDAP_INVALID_CREDENTIALS)
         {
-            std::cerr << "user ip incremented blacklist count\n";
 
-            std::tuple ip_user_key(user_ip, ldapBindUser);
-            (blacklist[ip_user_key].failCount)++;
-            blacklist[ip_user_key].blacklistTime = std::chrono::steady_clock::now();
-            if (blacklist[ip_user_key].failCount >= 3)
+            (loginFailCount[ip_user_key])++;
+            lastLoginAttempt[ip_user_key] = std::chrono::steady_clock::now();
+
+            if (loginFailCount[ip_user_key] >= 3)
             {
                 std::cerr << "user ip added to blacklisted\n";
-                addToBlacklist(user_ip, ldapBindUser);
                 send(client_socket, "ERR\nip and user blacklisted for 1 minute", 40, 0);
                 return;
             }
         }
-        // fprintf(stderr, "LDAP bind error: %s\n", ldap_err2string(rc));
         ldap_unbind_ext_s(ldapHandle, NULL, NULL);
         send(client_socket, "ERR\n", 4, 0);
         return;
     }
 
-    auto key = std::make_tuple(user_ip, ldapBindUser);
-    auto it = blacklist.find(key);
-    if (it != blacklist.end())
+    auto it = loginFailCount.find(ip_user_key);
+    if (it != loginFailCount.end())
     {
-        blacklist.erase(it); // Remove entry after log in
+        loginFailCount.erase(it); // Remove entry after log in
     }
 
     // perform ldap search
@@ -232,7 +208,6 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
     if (rc != LDAP_SUCCESS)
     {
         std::cerr << "LDAP search error: " << ldap_err2string(rc) << "\n";
-        // fprintf(stderr, "LDAP search error: %s\n", ldap_err2string(rc));
         ldap_unbind_ext_s(ldapHandle, NULL, NULL);
         send(client_socket, "ERR\n", 4, 0);
         return;

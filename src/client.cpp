@@ -113,7 +113,7 @@ const char *getpass()
     const char RETURN = 10;
 
     unsigned char ch = 0;
-    static std::string password;
+    std::string password;
 
     printf("Password: ");
 
@@ -140,7 +140,9 @@ const char *getpass()
         }
     }
     printf("\n");
-    return password.c_str();
+
+    const char *passwordCStr = password.c_str();
+    return passwordCStr;
 }
 
 // Function to login with LDAP
