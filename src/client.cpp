@@ -153,7 +153,7 @@ void handleLogin(int client_socket)
     std::cin >> ldap_username;
 
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    password = getpass();
+    std::cin >> password;
 
     std::string request = "LOGIN\n" + ldap_username + "\n" + password + "\n";
     sendRequest(client_socket, request);
