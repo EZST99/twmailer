@@ -187,6 +187,7 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
             {
                 std::cerr << "user ip added to blacklisted\n";
                 send(client_socket, "ERR\nip and user blacklisted for 1 minute", 40, 0);
+                loginMutex.unlock();
                 return;
             }
             loginMutex.unlock();
@@ -377,13 +378,13 @@ void handleRead(int client_socket, const std::string &username, const std::strin
             response += line + "\n";
         }
         inFile.close();
-        mailDirMutex.unlock();
         send(client_socket, response.c_str(), response.size(), 0);
     }
     else
     {
         send(client_socket, "ERR\n", 4, 0);
     }
+    mailDirMutex.unlock();
 }
 
 // Function to handle the DEL command
