@@ -187,6 +187,7 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
             {
                 std::cerr << "user ip added to blacklisted\n";
                 send(client_socket, "ERR\nip and user blacklisted for 1 minute", 40, 0);
+                loginMutex.unlock();
                 return;
             }
             loginMutex.unlock();
