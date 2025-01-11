@@ -49,6 +49,7 @@ int getNextMessageId(const std::string &userDir)
     return maxId + 1;
 }
 
+// Function to retrieve IP address of client_socket
 std::string getClientIP(int client_socket)
 {
     struct sockaddr_in addr;
@@ -60,27 +61,31 @@ std::string getClientIP(int client_socket)
     return "unknown";
 }
 
+// check if ip + username is blacklisted
 bool isBlacklisted(const std::string &key)
 {
     loginMutex.lock();
     auto it = loginFailCount.find(key);
     if (it != loginFailCount.end())
     {
-        // Check if more than 3 fails or the blacklist time has expired
         auto now = std::chrono::steady_clock::now();
+
+        // Check if more than 3 fails and the blacklist time has not expired
         if (it->second >= 3 && now - lastLoginAttempt[key] <= std::chrono::minutes(1))
         {
             loginMutex.unlock();
             return true;
         }
+
+        // erase if 1 minute has expired
         if (now - lastLoginAttempt[key] > std::chrono::minutes(1))
         {
-            loginFailCount.erase(it); // Only remove expired entries
+            loginFailCount.erase(it);
         }
     }
 
     loginMutex.unlock();
-    return false; // Not in blacklist
+    return false;
 }
 
 // Function to handle the LOGIN command
@@ -96,12 +101,8 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
     sprintf(ldapBindUser, "uid=%s,ou=people,dc=technikum-wien,dc=at", rawLdapUser);
 
     std::string user_ip = getClientIP(client_socket);
-
     std::string ip_user_key = user_ip + "_" + ldap_username;
 
-    // load blacklist
-
-    // check is ip + user blacklisted?
     if (isBlacklisted(ip_user_key))
     {
         std::cerr << "user ip are blacklisted\n";
@@ -136,8 +137,8 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
     // set version options
     rc = ldap_set_option(
         ldapHandle,
-        LDAP_OPT_PROTOCOL_VERSION, // OPTION
-        &ldapVersion);             // IN-Value
+        LDAP_OPT_PROTOCOL_VERSION,
+        &ldapVersion);
     if (rc != LDAP_OPT_SUCCESS)
     {
         std::cerr << "ldap_set_option(PROTOCOL_VERSION): " << ldap_err2string(rc) << "\n";
@@ -154,7 +155,6 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
     if (rc != LDAP_SUCCESS)
     {
         std::cerr << "ldap_start_tls_s(): " << ldap_err2string(rc) << "\n";
-        // fprintf(stderr, "ldap_start_tls_s(): %s\n", ldap_err2string(rc));
         ldap_unbind_ext_s(ldapHandle, NULL, NULL);
         send(client_socket, "ERR\n", 4, 0);
         return;
@@ -200,7 +200,7 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
     auto it = loginFailCount.find(ip_user_key);
     if (it != loginFailCount.end())
     {
-        loginFailCount.erase(it); // Remove entry after log in
+        loginFailCount.erase(it); // Remove entry after successful log in
     }
     loginMutex.unlock();
 
@@ -277,12 +277,11 @@ void handleLogin(int client_socket, const std::string &ldap_username, const std:
 
     printf("\n");
 
-    ldap_memfree(dn);           // Free DN memory after use
-    ldap_msgfree(searchResult); // Free the search result
     // Clean up and unbind
+    ldap_memfree(dn);
+    ldap_msgfree(searchResult);
     ldap_unbind_ext_s(ldapHandle, NULL, NULL);
 
-    // Send success message
     send(client_socket, "OK\n", 3, 0);
 }
 
@@ -295,7 +294,7 @@ void handleSend(int client_socket, const std::string &sender, const std::string 
     int messageId = getNextMessageId(userDir);
     std::string messageFile = userDir + "/" + std::to_string(messageId) + ".msg";
     std::ofstream outFile(messageFile);
-    
+
     if (outFile)
     {
         outFile << "Sender: " << sender << "\n";
@@ -508,7 +507,7 @@ int main(int argc, char **argv)
         perror("Error initializing server");
         return EXIT_FAILURE;
     }
-    
+
     while (true)
     {
         sockaddr_in client_addr;

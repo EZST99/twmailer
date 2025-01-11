@@ -72,29 +72,16 @@ std::string receiveResponse(int client_socket)
 int getch()
 {
     int ch;
-    // https://man7.org/linux/man-pages/man3/termios.3.html
     struct termios t_old, t_new;
 
-    // https://man7.org/linux/man-pages/man3/termios.3.html
-    // tcgetattr() gets the parameters associated with the object referred
-    //   by fd and stores them in the termios structure referenced by
-    //   termios_p
     tcgetattr(STDIN_FILENO, &t_old);
 
     // copy old to new to have a base for setting c_lflags
     t_new = t_old;
 
-    // https://man7.org/linux/man-pages/man3/termios.3.html
-    //
-    // ICANON Enable canonical mode (described below).
-    //   * Input is made available line by line (max 4096 chars).
-    //   * In noncanonical mode input is available immediately.
-    //
-    // ECHO   Echo input characters.
     t_new.c_lflag &= ~(ICANON | ECHO);
 
     // sets the attributes
-    // TCSANOW: the change occurs immediately.
     tcsetattr(STDIN_FILENO, TCSANOW, &t_new);
 
     ch = getchar();
@@ -104,6 +91,7 @@ int getch()
 
     return ch;
 }
+
 // Function to get password with hidden input
 const char *getpass()
 {
@@ -153,7 +141,9 @@ void handleLogin(int client_socket)
     std::cin >> ldap_username;
 
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    std::cin >> password;
+    password = getpass();
+    // std::cout << "Password: ";
+    // std::cin >> password;
 
     std::string request = "LOGIN\n" + ldap_username + "\n" + password + "\n";
     sendRequest(client_socket, request);
@@ -238,7 +228,7 @@ void handleList(int client_socket)
                   << response << std::endl;
     }
 
-    //std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    // std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 }
 
 // Function to handle the READ command
